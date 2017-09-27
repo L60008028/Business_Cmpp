@@ -1,0 +1,86 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using model;
+using System.Collections;
+using System.Security.Cryptography;
+
+namespace cmppV2
+{
+    public class Cmpp_Login:EnPackage
+    {
+        CmppConnectModel _cc;
+        public Cmpp_Login(CmppConnectModel cc)
+        {
+            _cc = cc;
+        }
+
+ 
+        public override byte[] Encode()
+        {
+            //head
+            CmppHeaderModel head = new CmppHeaderModel();
+            head.Command_Id = (uint)Cmpp_Command.CMPP_CONNECT;
+            head.Total_Length =GlobalModel.HeaderLength + 27;
+            head.Sequence_Id = Tools.GetSequence_Id();
+            byte[] headb = this.Header(head);
+            ArrayList al = new ArrayList(headb);
+            //body
+            byte[] timeStampbytes = this.Uint4ToBytes(_cc.Timestamp);
+            string source_addr = _cc.Source_Addr.Length > 6 ? _cc.Source_Addr.Substring(0, 6) : _cc.Source_Addr;//企业id长度6
+            string ts = _cc.Timestamp.ToString();
+            if(ts.Length==9)
+            {
+                ts = "0" + ts;
+            }
+
+            //f1
+            string authenticatorSource = source_addr + "\0\0\0\0\0\0\0\0\0" + _cc.Password + ts;
+            byte[] authenticatorSourcebytes_test = Tools.GetMd5Bytes(authenticatorSource);
+
+
+            //f2 Source_Addr=002122,Timestamp=812184445,Version=20
+           // source_addr = "002122";
+           // _cc.Password = "02122";
+          //  ts = "812184445";
+            ArrayList aslist = new ArrayList(Encoding.ASCII.GetBytes(source_addr));
+            aslist.AddRange(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+            aslist.AddRange(Encoding.ASCII.GetBytes(_cc.Password));
+            aslist.AddRange(Encoding.ASCII.GetBytes(ts));
+            byte[] authenB = aslist.ToArray(typeof(byte)) as byte[];
+            MD5 md5 = new MD5CryptoServiceProvider();
+            byte[] authenBs = md5.ComputeHash(authenB);
+            SMSLog.Log("CMPP_CONNECT==>Source_Addr=" + source_addr + ",Timestamp=" + ts + ",Password=" + _cc.Password+ ",authenBs="+Encoding.ASCII.GetString(authenBs));
+            //f3
+            byte[] authenticatorSourcebytes = Tools.MakeMd5AuthCode(_cc.Source_Addr,_cc.Password.ToString(),ts);
+
+
+            byte[] verbyte = Uint1ToBytes(_cc.Version); //new byte[1];
+            // verbyte[0] =(byte) _cc.Version;
+            // Array.Reverse(verbyte);
+            //byte[] sourceb = Encoding.ASCII.GetBytes(source_addr);
+
+           //  byte[] sourceb = new byte[6];
+           // byte[] byteaddr=Encoding.ASCII.GetBytes(source_addr);
+           // Array.Copy(byteaddr, sourceb, byteaddr.Length);
+            //byte[] sourceb = Encoding.ASCII.GetBytes(source_addr);
+
+            al.AddRange(StringToBytes(source_addr,6));
+            //for (int i = 0; i < 6-source_addr.Length;i++ )
+            //{
+            //    al.AddRange(new byte[] { 0 });
+            //}
+            al.AddRange(authenBs);
+            al.AddRange(verbyte);
+            al.AddRange(timeStampbytes);
+            byte[] resultbyte = al.ToArray(typeof(byte)) as byte[];
+
+            Console.WriteLine("Source_Addr=" + _cc.Source_Addr+ ",Timestamp=" + _cc.Timestamp+ ",Version=" + _cc.Version);
+            return resultbyte;
+        }
+
+ 
+
+    }//end
+}//end
